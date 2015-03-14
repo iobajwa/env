@@ -4,7 +4,7 @@
 ].each {|req| require "#{File.expand_path(File.dirname(__FILE__))}/#{req}"}
 require "yaml"
 require "erb"
-require "FileUtils"
+require "fileutils"
 
 class PackageWorker
 
@@ -18,6 +18,13 @@ class PackageWorker
 		end
 	end
 
+	# removes the 'packages' folder altogether
+	def clean
+		packages_folder = @defaults[:package_dump]
+		FileUtils.rm_r packages_folder if Dir.exist? packages_folder
+	end
+
+
 	# deploys packages to the project folder
 	def deploy_packages
 		
@@ -30,7 +37,7 @@ class PackageWorker
 		outdated_packages = get_list_of_outdated_packages packages
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
 		
-		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated."}
+		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
 		download_packages outdated_packages, @defaults[:version_file_name]
 		install_packages outdated_packages
 
@@ -99,18 +106,43 @@ class PackageWorker
 	end
 
 	def download_packages(packages, version_file)
-		packages.each_pair{  |name, properties|
+		Dir.mkdir @defaults[:package_dump] unless Dir.exist? @defaults[:package_dump]
+		packages.each_pair {  |name, properties|
 			write_status_message "downloading package", name, properties
 
 			output_dir = properties[:dump_at]
 			FileUtils.rm_r output_dir if Dir.exist? output_dir
+			repo_type = properties[:repo_type]
 
-			pkg_full_path = File.join properties[:repo], properties[:located_at]
-			svn_command = "svn export "
-			svn_command += "-r #{properties[:r]} " if properties.include?(:r)
-			svn_command += "#{pkg_full_path} #{output_dir}"
-			output, exit_code = execute_command svn_command
-			raise ToolException.new "package download failed. SVN output: #{output}" unless exit_code == 0
+			output, exit_code = nil
+			if repo_type == :svn
+				pkg_full_path = File.join properties[:repo], properties[:located_at]
+				svn_command = "svn export "
+				svn_command += "-r #{properties[:r]} " if properties.include?(:r)
+				svn_command += "#{pkg_full_path} #{output_dir}"
+				output, exit_code = execute_command svn_command
+			else
+				old_wd = Dir.getwd
+				FileUtils.mkdir output_dir
+				begin
+					Dir.chdir(properties[:repo])
+					zip_file = File.join(output_dir, "package.zip")
+					branch = "master"
+					branch = properties[:v] if properties.include?(:v)
+					branch = properties[:r] if properties.include?(:r)
+					git_command = "git archive #{branch} --format zip --output \"#{zip_file}\" -0"
+					output, exit_code = execute_command git_command
+				rescue
+					Dir.chdir old_wd
+				end
+			end
+
+			raise ToolException.new "package download failed. #{repo_type.to_s.upcase} output: #{output}" if exit_code != 0
+
+			if repo_type == :git
+				unzip_package zip_file, properties[:located_at], properties[:dump_at]
+				File.delete zip_file
+			end
 
 			specific_version = properties[:r] if properties.include?(:r)
 			specific_version = properties[:v] if properties.include?(:v)
@@ -118,6 +150,21 @@ class PackageWorker
 
 			version_file_full_path = File.join properties[:dump_at], version_file
 			File.write version_file_full_path, "#{specific_version}"
+		}
+	end
+
+	def unzip_package(zip_file, relative_path, destination_path)
+		require "zip"
+
+		Zip::File.open(zip_file) {  |zip_file|
+			zip_file.each {  |f|
+				next unless f.name.start_with? relative_path
+				name = f.name[relative_path.length..f.name.length]
+				next if name == "" || name == "/" || name == "\\"
+				f_path = File.join(destination_path, name)
+				FileUtils.mkdir_p(File.dirname(f_path))
+				zip_file.extract(f, f_path) unless File.exist?(f_path)
+		   }
 		}
 	end
 
@@ -146,21 +193,32 @@ class PackageWorker
 		package_properties = parse_package_properties pkg_name, elements
 
 		known_package_properties = @defaults[:known_packages].include?(pkg_name) ? @defaults[:known_packages][pkg_name] : {} 
-		default_server    = @defaults[:svn_server_address]
+		repo_type = known_package_properties[:repo_type]
+		repo_type = @defaults[:default_repo_type] if repo_type == nil
+
 		default_installer = known_package_properties.include?(:installer) ? known_package_properties[:installer] : @defaults[:default_package_installer]
 		default_location  = known_package_properties.include?(:located_at) ? known_package_properties[:located_at] : @defaults[:default_package_location]
 		default_dump_at   = @defaults[:package_dump]
-		default_dump_at = File.join(default_dump_at, pkg_name.to_s)
+		default_dump_at   = File.join(default_dump_at, pkg_name.to_s)
+		package_repo      = known_package_properties.include?(:repo) ? known_package_properties[:repo] : package_properties[:repo]
 
-		package_repo = known_package_properties.include?(:repo) ? known_package_properties[:repo] : package_properties[:repo]
+		if repo_type == :svn
+			default_server = @defaults[:svn_server_address]
+			package_repo = File.join(default_server, "#{pkg_name}") unless package_repo
+			deep_path = package_properties.include?(:v) ? "tags/#{package_properties[:v]}" : "trunk"
+			package_repo = File.join(package_repo, deep_path)
+		elsif repo_type == :git
+			default_server    = @defaults[:git_server_address]
+		else
+			raise ToolException.new "'#{repo_type}' repos are not supported (package: '#{pkg_name}')."
+		end
+
 		package_repo = File.join(default_server, "#{pkg_name}") unless package_repo
-		deep_path = package_properties.include?(:v) ? "tags/#{package_properties[:v]}" : "trunk"
-		package_repo = File.join(package_repo, deep_path)
-
 		package_properties[:repo]       = package_repo
 		package_properties[:dump_at]    = default_dump_at unless package_properties.include?(:dump_at)
 		package_properties[:installer]  = default_installer unless package_properties.include?(:installer)
 		package_properties[:located_at] = default_location unless package_properties.include?(:located_at)
+		package_properties[:repo_type]  = repo_type
 
 		return { pkg_name => package_properties }
 	end
@@ -181,14 +239,26 @@ class PackageWorker
 		return properties[:r] if properties.include?(:r)
 
 		puts "polling for latest version of '#{name}'.."
-		output, exit_code = execute_command "svn info -rHead #{properties[:repo]}"
-		revision = nil
-		output.each {  |line|
-			next unless line.start_with?("Revision:")
-			revision = line.gsub('Revision:', '').strip
-			break
-		} if exit_code == 0
-		raise ToolException.new("failed to receive correct version. SVN output: #{output}") unless revision
+		repo_type = properties[:repo_type]
+		if repo_type == :svn
+			output, exit_code = execute_command "svn info -rHead #{properties[:repo]}"
+			revision = nil
+			output.each {  |line|
+				next unless line.start_with?("Revision:")
+				revision = line.gsub('Revision:', '').strip
+				break
+			} if exit_code == 0
+			raise ToolException.new("failed to receive correct version. SVN output: #{output}") unless revision
+		else
+			old_wd = Dir.getwd
+			Dir.chdir properties[:repo]
+			begin				
+				output, exit_code = execute_command "git log -n 1 master --pretty=format:\"%H\""
+				revision = output[0] if exit_code == 0
+			rescue Exception => e
+				Dir.chdir old_wd
+			end
+		end
 		return revision
 	end
 

@@ -13,6 +13,8 @@ class Packages
             worker.deploy_packages
         elsif command == "lock"
             worker.lock_packages
+        elsif command == "clean"
+            worker.clean
         else
             worker.new_package_list
         end
@@ -25,7 +27,7 @@ class Packages
   # Command Line Support ###############################
 	
   if ($0 == __FILE__)
-      valid_commands = ["new", "deploy", "lock"]
+      valid_commands = ["new", "deploy", "lock", "clean"]
       ENV['CD']      = Dir.pwd
 
       if ARGV.length == 0 || ARGV.length > 1 || !valid_commands.include?(ARGV[0])

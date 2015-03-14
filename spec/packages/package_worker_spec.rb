@@ -112,11 +112,13 @@ describe PackageWorker do
 	describe "when parsing the package from string" do
 		before(:each) do
 			$worker = PackageWorker.new
-			$worker.defaults[:svn_server_address] = "server/"
+			$worker.defaults[:svn_server_address] = "svn_server/"
+			$worker.defaults[:git_server_address] = "git_server/"
 			$worker.defaults[:package_dump] = "dump_here/"
 			$worker.defaults[:default_package_installer] = "default_installer.rb"
 			$worker.defaults[:default_package_location] = "default_location"
 			$worker.defaults[:known_packages] = {}
+			$worker.defaults[:default_repo_type] = :svn
 		end
 
 		describe "raises error when" do
@@ -131,58 +133,126 @@ describe PackageWorker do
 		end
 
 		describe "returns valid package information when" do
-			it "only package name has been provided" do
-				expected_package = { :some_package => 
-					{
-						:repo => "server/some_package/trunk",
-						:dump_at => "dump_here/some_package",
-						:located_at => "default_location",
-						:installer => "default_installer.rb",
-					} 
-				}
-				
-				parsed_package = $worker.parse_package_from_string "some_package"
-
-				parsed_package.should be == expected_package
-			end
-
-			it "package name and other properties have been provided" do
-				expected_package = { :some_package => 
-					{
-						:v => "1.23",
-						:repo => "server/some_package/tags/1.23",
-						:dump_at => "dump_here/some_package",
-						:located_at => "here",
-						:installer => "fancy_installer.rb",
-					} 
-				}
-				
-				parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- installer = fancy_installer.rb   -- located_at = here"
-
-				parsed_package.should be == expected_package
-			end
-
-			it "package is a known package and user has provided only some of the properties, defaults are used for others" do
-				$worker.defaults[:known_packages] = { :some_package => 
-					{
-						:repo => "some_other_server/fancy_repo",
-						:located_at => "default_location/",
-						:installer => "custom_installer.rb",
+			describe "repo type is svn" do
+				it "only package name has been provided" do
+					expected_package = { :some_package => 
+						{
+							:repo => "svn_server/some_package/trunk",
+							:dump_at => "dump_here/some_package",
+							:located_at => "default_location",
+							:installer => "default_installer.rb",
+							:repo_type => :svn
+						} 
 					}
-				}
-				expected_package = { :some_package => 
-					{
-						:v => "1.23",
-						:located_at => "here",
-						:repo => "some_other_server/fancy_repo/tags/1.23",
-						:dump_at => "dump_here/some_package",
-						:installer => "custom_installer.rb",
-					} 
-				}
-				
-				parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- located_at = here"
+					
+					parsed_package = $worker.parse_package_from_string "some_package"
 
-				parsed_package.should be == expected_package
+					parsed_package.should be == expected_package
+				end
+
+				it "package name and other properties have been provided" do
+					expected_package = { :some_package => 
+						{
+							:v => "1.23",
+							:repo => "svn_server/some_package/tags/1.23",
+							:dump_at => "dump_here/some_package",
+							:located_at => "here",
+							:installer => "fancy_installer.rb",
+							:repo_type => :svn
+						} 
+					}
+					
+					parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- installer = fancy_installer.rb   -- located_at = here"
+
+					parsed_package.should be == expected_package
+				end
+
+				it "package is a known package and user has provided only some of the properties, defaults are used for others" do
+					$worker.defaults[:known_packages] = { :some_package => 
+						{
+							:repo => "some_other_server/fancy_repo",
+							:located_at => "default_location/",
+							:installer => "custom_installer.rb",
+						}
+					}
+					expected_package = { :some_package => 
+						{
+							:v => "1.23",
+							:located_at => "here",
+							:repo => "some_other_server/fancy_repo/tags/1.23",
+							:dump_at => "dump_here/some_package",
+							:installer => "custom_installer.rb",
+							:repo_type => :svn
+						} 
+					}
+					
+					parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- located_at = here"
+
+					parsed_package.should be == expected_package
+				end
+			end
+
+			describe "repo type is git" do
+				before(:each) do
+					$worker.defaults[:default_repo_type] = :git
+				end
+
+				it "only package name has been provided" do
+					expected_package = { :some_package => 
+						{
+							:repo => "git_server/some_package",
+							:dump_at => "dump_here/some_package",
+							:located_at => "default_location",
+							:installer => "default_installer.rb",
+							:repo_type => :git
+						} 
+					}
+					
+					parsed_package = $worker.parse_package_from_string "some_package"
+
+					parsed_package.should be == expected_package
+				end
+
+				it "package name and other properties have been provided" do
+					expected_package = { :some_package => 
+						{
+							:v => "1.23",
+							:repo => "git_server/some_package",
+							:dump_at => "dump_here/some_package",
+							:located_at => "here",
+							:installer => "fancy_installer.rb",
+							:repo_type => :git
+						} 
+					}
+					
+					parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- installer = fancy_installer.rb   -- located_at = here"
+
+					parsed_package.should be == expected_package
+				end
+
+				it "package is a known package and user has provided only some of the properties, defaults are used for others" do
+					$worker.defaults[:known_packages] = { :some_package => 
+						{
+							:repo => "some_other_server/fancy_repo",
+							:located_at => "default_location/",
+							:installer => "custom_installer.rb",
+						}
+					}
+					expected_package = { :some_package => 
+						{
+							:v => "1.23",
+							:located_at => "here",
+							:repo => "some_other_server/fancy_repo",
+							:dump_at => "dump_here/some_package",
+							:installer => "custom_installer.rb",
+							:repo_type => :git
+						} 
+					}
+					
+					parsed_package = $worker.parse_package_from_string "some_package  -- v = 1.23   -- located_at = here"
+
+					parsed_package.should be == expected_package
+				end
 			end
 		end
 	end
@@ -255,7 +325,7 @@ describe PackageWorker do
 					it "svn command fails" do
 						expect($worker).to receive(:execute_command).with("svn info -rHead repo_address").and_return( [['some', 'output'], 0] )
 						expect {
-							$worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address" }
+							$worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address", :repo_type => :svn }
 						}.to raise_error(ToolException, 'failed to receive correct version. SVN output: ["some", "output"]')
 					
 					end
@@ -263,7 +333,7 @@ describe PackageWorker do
 					it "svn command exits with a non-zero exit code" do
 						expect($worker).to receive(:execute_command).with("svn info -rHead repo_address").and_return( [['some', 'output'], 4] )
 						expect {
-							$worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address" }
+							$worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address", :repo_type => :svn }
 						}.to raise_error(ToolException, 'failed to receive correct version. SVN output: ["some", "output"]')
 					end
 				end
@@ -271,7 +341,7 @@ describe PackageWorker do
 				it "returns valid revision number otherwise" do
 					expect($worker).to receive(:execute_command).with("svn info -rHead repo_address").and_return( [['some', 'output', 'Revision:   	some_fancy_revision	   '], 0] )
 
-					version_received = $worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address" }
+					version_received = $worker.get_version_of_package_in_repo :my_fancy_repo, { :repo => "repo_address", :repo_type => :svn }
 
 					version_received.should be == "some_fancy_revision"
 				end
@@ -279,42 +349,104 @@ describe PackageWorker do
 		end # package_repo.version
 	end
 
-	describe "when downloading packages" do
+	describe "when downloading" do
 		before(:each) do
 			$worker = PackageWorker.new
+			$worker.defaults[:package_dump] = "dump here"
+			expect(Dir).to receive(:exist?).with("dump here").and_return(false)
+			expect(Dir).to receive(:mkdir).with("dump here")
 		end
 
-		describe "raises error when" do
-			it "svn command exists with a non-zero exit code" do
-				dummy_packages = { :one => { :repo => "repo", :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, :two => { :repo => "", :dump_at => "path2" } }
-				expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
-				expect($worker). to receive(:execute_command).with("svn export repo/loc1 path 1").and_return( [['some', 'output'], -12] )
+		describe "svn packages, it" do
+			describe "raises error when" do
+				it "svn command exists with a non-zero exit code" do
+					dummy_packages = { :one => { :repo_type => :svn, :repo => "repo", :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, :two => { :repo => "", :dump_at => "path2" } }
+					expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
+					expect($worker). to receive(:execute_command).with("svn export repo/loc1 path 1").and_return( [['some', 'output'], -12] )
+					expect(Dir).to receive(:exist?).with("path 1").and_return(false)
 
-				expect {
-					$worker.download_packages dummy_packages, "file"
-				}.to raise_error(ToolException, "package download failed. SVN output: [\"some\", \"output\"]")
+					expect {
+						$worker.download_packages dummy_packages, "file"
+					}.to raise_error(ToolException, "package download failed. SVN output: [\"some\", \"output\"]")
+				end
+			end
+
+			it "downloads each package otherwise" do
+				dummy_packages = { :one   => { :repo => "repo", :repo_type => :svn, :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, 
+								   :two   => { :repo => "repoB", :repo_type => :svn, :located_at => "loc2", :dump_at => "path 2", :r => "123" },
+								   :three => { :repo => "repoC", :repo_type => :svn, :located_at => "loc3", :dump_at => "path 3" }, }
+				expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
+				expect(Dir).to receive(:exist?).with('path 1').and_return(false)
+				expect($worker).to receive(:execute_command).with("svn export repo/loc1 path 1").and_return( [['some'], 0] )
+				expect($worker).to receive(:puts).with("downloading package 'two' r 123..")
+				expect(Dir).to receive(:exist?).with('path 2').and_return(true)
+				expect(FileUtils).to receive(:rm_r).with('path 2')
+				expect($worker).to receive(:execute_command).with("svn export -r 123 repoB/loc2 path 2").and_return( [['output'], 0] )
+				expect($worker).to receive(:puts).with("downloading package 'three'..")
+				expect(Dir).to receive(:exist?).with('path 3').and_return(true)
+				expect(FileUtils).to receive(:rm_r).with('path 3')
+				expect($worker).to receive(:execute_command).with("svn export repoC/loc3 path 3").and_return( [['..'], 0] )
+				expect(File).to receive(:write).with('path 1/version.file', "1.23")
+				expect(File).to receive(:write).with('path 2/version.file', "123")
+
+				$worker.download_packages dummy_packages, "version.file"
 			end
 		end
 
-		it "downloads each package otherwise" do
-			dummy_packages = { :one   => { :repo => "repo", :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, 
-							   :two   => { :repo => "repoB", :located_at => "loc2", :dump_at => "path 2", :r => "123" },
-							   :three => { :repo => "repoC", :located_at => "loc3", :dump_at => "path 3" }, }
-			expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
-			expect(Dir).to receive(:exist?).with('path 1').and_return(false)
-			expect($worker).to receive(:execute_command).with("svn export repo/loc1 path 1").and_return( [['some'], 0] )
-			expect($worker).to receive(:puts).with("downloading package 'two' r 123..")
-			expect(Dir).to receive(:exist?).with('path 2').and_return(true)
-			expect(FileUtils).to receive(:rm_r).with('path 2')
-			expect($worker).to receive(:execute_command).with("svn export -r 123 repoB/loc2 path 2").and_return( [['output'], 0] )
-			expect($worker).to receive(:puts).with("downloading package 'three'..")
-			expect(Dir).to receive(:exist?).with('path 3').and_return(true)
-			expect(FileUtils).to receive(:rm_r).with('path 3')
-			expect($worker).to receive(:execute_command).with("svn export repoC/loc3 path 3").and_return( [['..'], 0] )
-			expect(File).to receive(:write).with('path 1/version.file', "1.23")
-			expect(File).to receive(:write).with('path 2/version.file', "123")
+		describe "git packages, it" do
+			describe "raises error when" do
+				it "git command exists with a non-zero exit code" do
+					dummy_packages = { :one => { :repo => "repo", :repo_type => :git, :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, :two => { :repo => "", :dump_at => "path2" } }
+					expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
+					expect(Dir).to receive(:chdir).with("repo")
+					expect($worker).to receive(:execute_command).with("git archive 1.23 --format zip --output \"path 1/package.zip\" -0").and_return( [['some', 'output'], -12] )
+					expect(Dir).to receive(:exist?).with("path 1").and_return(false)
 
-			$worker.download_packages dummy_packages, "version.file"
+					expect {
+						$worker.download_packages dummy_packages, "file"
+					}.to raise_error(ToolException, "package download failed. GIT output: [\"some\", \"output\"]")
+				end
+			end
+
+			it "downloads each package otherwise" do
+				dummy_packages = { :one   => { :repo => "repo", :repo_type => :git, :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, 
+								   :two   => { :repo => "repoB", :repo_type => :git, :located_at => "loc2", :dump_at => "path 2", :r => "123" },
+								   :three => { :repo => "repoC", :repo_type => :git, :located_at => "loc3", :dump_at => "path 3" }, }
+				expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
+				expect(Dir).to receive(:exist?).with('path 1').and_return(false)
+				expect(Dir).to receive(:chdir).with("repo")
+				expect(FileUtils).to receive(:mkdir).with('path 1')
+				expect($worker).to receive(:execute_command).with("git archive 1.23 --format zip --output \"path 1/package.zip\" -0").and_return( [['some'], 0] )
+				expect($worker).to receive(:unzip_package).with("path 1/package.zip", "loc1", "path 1")
+				expect(File).to receive(:delete).with("path 1/package.zip")
+				expect($worker).to receive(:puts).with("downloading package 'two' r 123..")
+				expect(Dir).to receive(:exist?).with('path 2').and_return(true)
+				expect(FileUtils).to receive(:rm_r).with('path 2')
+				expect(Dir).to receive(:chdir).with("repoB")
+				expect(FileUtils).to receive(:mkdir).with('path 2')
+				expect($worker).to receive(:execute_command).with("git archive 123 --format zip --output \"path 2/package.zip\" -0").and_return( [['output'], 0] )
+				expect($worker).to receive(:unzip_package).with("path 2/package.zip", "loc2", "path 2")
+				expect(File).to receive(:delete).with("path 2/package.zip")
+				expect($worker).to receive(:puts).with("downloading package 'three'..")
+				expect(Dir).to receive(:exist?).with('path 3').and_return(true)
+				expect(FileUtils).to receive(:rm_r).with('path 3')
+				expect(Dir).to receive(:chdir).with("repoC")
+				expect(FileUtils).to receive(:mkdir).with('path 3')
+				expect($worker).to receive(:execute_command).with("git archive master --format zip --output \"path 3/package.zip\" -0").and_return( [['..'], 0] )
+				expect($worker).to receive(:unzip_package).with("path 3/package.zip", "loc3", "path 3")
+				expect(File).to receive(:delete).with("path 3/package.zip")
+				expect(File).to receive(:write).with('path 1/version.file', "1.23")
+				expect(File).to receive(:write).with('path 2/version.file', "123")
+
+
+				$worker.download_packages dummy_packages, "version.file"
+			end
+		end
+	end
+
+	describe "when unziping package" do
+		it "unpacks only those files/directories which begin with passed path" do
+
 		end
 	end
 
@@ -352,6 +484,8 @@ describe PackageWorker do
 			$worker.install_packages dummy_packages
 		end
 	end
+
+
 
 
 	##############
