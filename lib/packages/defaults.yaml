@@ -4,7 +4,7 @@
 :default_package_installer: installer
 :default_package_location: package/
 :project_package_file: project.packages
-:package_dump:  <%= ENV['PackagesArtifactsRoot'] %>/packages
+:package_dump:  <%= ENV['ArtifactsRoot'] %>/packages
 :version_file_name: version.txt
 :default_repo_type: :git
 
