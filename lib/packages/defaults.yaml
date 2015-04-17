@@ -1,7 +1,7 @@
 
 :svn_server_address: <%= ENV['SVN_SERVER'] %>
 :git_server_address: <%= ENV['GIT_SERVER'] %>
-:default_package_installer: installer
+:default_package_installer: unpack.bat
 :default_package_location: package/
 :project_package_file: project.packages
 :package_dump:  <%= ENV['ArtifactsRoot'] %>/packages
@@ -13,12 +13,12 @@
         :repo: <%= ENV['GIT_SERVER'] %>/halwayi/
         # :located_at: package/
         # :repo_type: :git
-        # :installer: unpack.bat
+        :installer: unpack.bat
     :boski:
         :repo: <%= ENV['GIT_SERVER'] %>/boski/
         # :located_at: package/
         # :repo_type: :git
-        # :installer: unpack.bat
+        :installer: unpack.bat
 
 
 :default_look_up_paths:

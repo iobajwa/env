@@ -189,12 +189,27 @@ class PackageWorker
 		packages.each_pair{  |name, properties|
 			installer = properties[:installer]
 			next unless installer
+			artifacts_root = properties[:dump_at]
 			installer = File.join properties[:dump_at], properties[:installer]
 			next unless File.exist? installer
 
 			write_status_message "installing package", name, properties
-			output, exit_code = execute_command installer
-			raise ToolException.new "package installation failed: #{output}" unless exit_code == 0
+			require 'open3'
+
+			log = File.new("#{artifacts_root}/installation.log", "w+")
+			command = "#{installer} \"#{artifacts_root}\""
+
+			Open3.popen3(command) do |stdin, stdout, stderr|
+			     log.puts "[OUTPUT]:\n#{stdout.read}\n"
+			     unless (err = stderr.read).empty? then 
+			         log.puts "[ERROR]:\n#{err}\n"
+			     end
+			end
+			# output = output.split("\n")
+			# output = [output] unless output.class == Array
+			# exit_code = $?.exitstatus
+			# output, exit_code = execute_command installer
+			# raise ToolException.new "package installation failed: #{output}" unless exit_code == 0
 		}
 	end
 
