@@ -28,11 +28,7 @@ class PackageWorker
 	# deploys packages to the project folder
 	def deploy_packages
 		
-		file = find_package_file @defaults[:default_look_up_paths], @defaults[:project_package_file]
-		raise ToolException.new "Could not locate the project.packages file." unless file
-		
-		packages = load_package_file file
-		raise ToolMessage.new "There are no package dependencies!" if packages.length == 0
+		file, packages = find_and_load_packages_from_package_file
 
 		outdated_packages = get_list_of_outdated_packages packages
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
@@ -52,11 +48,7 @@ class PackageWorker
 	# to the specific revision number of the deployed package (provided it has been
 	# deployed)
 	def lock_packages
-		file = find_package_file @defaults[:default_look_up_paths], @defaults[:project_package_file]
-		raise ToolException.new "Could not locate the project.packages file." unless file
-
-		packages = load_package_file file
-		raise ToolMessage.new "There are no package dependencies!" if packages.length == 0
+		file, packages = find_and_load_packages_from_package_file
 
 		bleeding_packages = get_list_of_packages_configured_for_bleeding_edge_versions packages
 		raise ToolMessage.new "no packages to lock." if bleeding_packages.length == 0
@@ -66,6 +58,21 @@ class PackageWorker
 
 		update_package_file file, deployed_packages
 	end
+
+
+	# unlocks the passed packages locked earlier
+	def unlock_packages(pkgs_to_unlock)
+
+		file, packages = find_and_load_packages_from_package_file
+		locked_packages = get_list_of_locked_packages packages
+		pkgs_to_unlock = locked_packages if pkgs_to_unlock == nil || pkgs_to_unlock == []
+		raise ToolMessage.new "no packages to unlock." if locked_packages.length == packages.length
+
+		unlocked_pkgs = unlock_locked_packages locked_packages, pkgs_to_unlock
+
+		write_packages_to_file file, unlocked_pkgs
+	end
+
 
 
 
@@ -90,6 +97,16 @@ class PackageWorker
 		lines.each {  |line| packages.merge! parse_package_from_string line }
 
 		return packages
+	end
+
+	def find_and_load_packages_from_package_file
+		file = find_package_file @defaults[:default_look_up_paths], @defaults[:project_package_file]
+		raise ToolException.new "Could not locate the project.packages file." unless file
+
+		packages = load_package_file file
+		raise ToolMessage.new "There are no package dependencies!" if packages.length == 0
+
+		return file, packages
 	end
 
 	def get_list_of_outdated_packages(packages)
@@ -309,17 +326,33 @@ class PackageWorker
 		lines.each {  |line|
 			pkg = parse_package_from_string line
 			pkg_name = pkg.keys[0]
-			if packages_to_update.include? pkg_name
-				line = line.chomp + " --r = " + packages_to_update[pkg_name][:read_version]
+		 	if packages_to_update.include? pkg_name
+		 		updated_lines.push package_to_string( pkg_name.to_s, packages_to_update[pkg_name] )
+		 	else
 				updated_lines.push line
-			else
-				updated_lines.push line
-			end
+		 	end
 		}
 
 		f = File.new(file, "w")
 		updated_lines.each {  |l| f.write l + "\n" }
 		f.close
+	end
+
+	def package_to_string(pkg_name, attributes)
+		if attributes.include?(:read_version) || attributes.include?(:r)
+			revision = attributes.include?(:read_version) ? attributes[:read_version] : attributes[:r]
+			return pkg_name + " --r = " + revision
+		elsif attributes.include?(:v)
+			return pkg_name + " --v = " + attributes[:v]
+		else
+			return pkg_name
+		end
+	end
+
+
+
+	def get_list_of_locked_packages(packages)
+		puts "packages are '#{packages}'"
 	end
 
 

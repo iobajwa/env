@@ -33,8 +33,9 @@ class Packages
       if ARGV.length == 0 || ARGV.length > 1 || !valid_commands.include?(ARGV[0])
           puts "Invalid argument" + (ARGV.length > 1 ? "s." : ".") unless ARGV.length == 0
           puts "Usage:\n" + 
-               "new     : setups the project to use default packages\n" +
+               # "new     : setups the project to use default packages\n" +
                "deploy  : pulls in the specified packages from their repos\n" +
+               "clean   : deletes all deployed packages\n" +
                "lock    : locks packages configured for bleeding edge versions to the deployed\n" +
                "          revisions\n"
                # "check_updates : polls the package repos to see if their are any updates available"

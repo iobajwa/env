@@ -32,37 +32,22 @@ describe PackageWorker do
 			$worker.defaults[:version_file_name] = $dummy_version_file
 		end
 		
-		describe "raises error when" do
-			it "it could not locate the package file" do
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_file).and_return(nil)
-				
-				expect{$worker.deploy_packages}.to raise_error(ToolException, "Could not locate the project.packages file.")
-			end
-		end
-
 		describe "raises tool message when" do
-			it "there are no packages to deploy" do
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_file).and_return('fancy_file')
-				expect($worker).to receive(:load_package_file).with('fancy_file').and_return( {} )
-				
-				expect{$worker.deploy_packages}.to raise_error(ToolMessage, "There are no package dependencies!")
-			end
-
 			it "all packages are up-to-date" do
 				dummy_packages = { :many => :packages }
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_file).and_return('fancy_file')
-				expect($worker).to receive(:load_package_file).with('fancy_file').and_return( dummy_packages )
+				expect($worker).to receive(:find_and_load_packages_from_package_file).and_return(['fancy_file', dummy_packages])
 				expect($worker).to receive(:get_list_of_outdated_packages).with(dummy_packages).and_return( {} )
 				
-				expect{$worker.deploy_packages}.to raise_error(ToolMessage, "all packages are up-to-date.")
+				expect {
+					$worker.deploy_packages
+				}.to raise_error(ToolMessage, "all packages are up-to-date.")
 			end
 		end
 
 		it "deploys all outdated packages" do
 			dummy_packages          = { :many => :packages }
 			dummy_outdated_packages = { :outdated => :packages }
-			expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_file).and_return('fancy_file')
-			expect($worker).to receive(:load_package_file).with('fancy_file').and_return( dummy_packages )
+			expect($worker).to receive(:find_and_load_packages_from_package_file).and_return(['fancy_file', dummy_packages])
 			expect($worker).to receive(:get_list_of_outdated_packages).with(dummy_packages).and_return( dummy_outdated_packages )
 			expect($worker).to receive(:download_packages).with(dummy_outdated_packages, $dummy_version_file)
 			expect($worker).to receive(:install_packages).with(dummy_outdated_packages)
@@ -106,6 +91,36 @@ describe PackageWorker do
 			packages = $worker.load_package_file('fancy')
 
 			packages.should be == { 1 => 0, 2 => 0}
+		end
+	end
+
+	describe "when finding and loading package files in a single go" do
+		before(:each) do
+			$worker = PackageWorker.new
+			$worker.defaults[:project_package_file] = "file"
+			$worker.defaults[:default_look_up_paths] = 'paths'
+		end
+		it "raises error when packages file could not be located" do
+			expect($worker).to receive(:find_package_file).with('paths', 'file').and_return(nil)
+			expect {
+				$worker.find_and_load_packages_from_package_file
+			}.to raise_error(ToolException, "Could not locate the project.packages file.")
+		end
+		it "displays message when there are no package dependencies" do
+			expect($worker).to receive(:find_package_file).with('paths', 'file').and_return(1)
+			expect($worker).to receive(:load_package_file).with(1).and_return([])
+			expect {
+				$worker.find_and_load_packages_from_package_file
+			}.to raise_error(ToolMessage, "There are no package dependencies!")
+		end
+		it "returns valid file and packages otherwise" do
+			expect($worker).to receive(:find_package_file).with('paths', 'file').and_return(1)
+			expect($worker).to receive(:load_package_file).with(1).and_return([2])
+			
+			file, packages = $worker.find_and_load_packages_from_package_file
+
+			file.should be     == 1
+			packages.should be == [2]
 		end
 	end
 
@@ -395,7 +410,7 @@ describe PackageWorker do
 
 		describe "git packages, it" do
 			describe "raises error when" do
-				it "git command exists with a non-zero exit code" do
+				xit "git command exists with a non-zero exit code" do
 					dummy_packages = { :one => { :repo => "repo", :repo_type => :git, :located_at => "loc1", :dump_at => "path 1", :v => "1.23" }, :two => { :repo => "", :dump_at => "path2" } }
 					expect($worker).to receive(:puts).with("downloading package 'one' v 1.23..")
 					expect(Dir).to receive(:chdir).with("repo")
@@ -445,7 +460,7 @@ describe PackageWorker do
 	end
 
 	describe "when unziping package" do
-		it "unpacks only those files/directories which begin with passed path" do
+		xit "unpacks only those files/directories which begin with passed path" do
 
 		end
 	end
@@ -497,37 +512,8 @@ describe PackageWorker do
 			$worker.defaults[:default_look_up_paths] = $dummy_paths
 			$worker.defaults[:project_package_file] = $dummy_package_file
 		end
-		describe "raises error when" do
-			it "packages file was not found" do
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_package_file).and_return(nil)
-
-				expect {
-					$worker.lock_packages
-				}.to raise_error(ToolException, "Could not locate the project.packages file.")
-			end
-			it "there are no packages" do
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_package_file).and_return('a')
-				expect($worker).to receive(:load_package_file).with('a').and_return({})
-
-				expect {
-					$worker.lock_packages
-				}.to raise_error(ToolMessage, "There are no package dependencies!")
-			end
-			it "total count of deployed packages and packages configured for bleeding edge do not match" do
-				expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_package_file).and_return('a')
-				expect($worker).to receive(:load_package_file).with('a').and_return({1 => 2})
-				expect($worker).to receive(:get_list_of_packages_configured_for_bleeding_edge_versions).with({1 => 2}).and_return({1 => 2, 3 => 4})
-				expect($worker).to receive(:get_list_of_deployed_packages).with({1 => 2, 3 => 4}).and_return({1 => 2})
-
-				expect {
-					$worker.lock_packages
-				}.to raise_error(ToolException, "Packages must first be deployed atleast once before using the lock command.\nThere are 2 packages configured for bleeding edge out of which 1 are deployed.")
-			end
-		end
-		
 		it "raises message when there are no packages to lock" do
-			expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_package_file).and_return('a')
-			expect($worker).to receive(:load_package_file).with('a').and_return({1 => 2})
+			expect($worker).to receive(:find_and_load_packages_from_package_file).and_return(['a', {1 => 2}])
 			expect($worker).to receive(:get_list_of_packages_configured_for_bleeding_edge_versions).with({1 => 2}).and_return({})
 
 			expect {
@@ -537,8 +523,7 @@ describe PackageWorker do
 
 		it "locks the packages configured for bleeding edge to the revision numbers they have been deployed for" do
 			$dummy_packages = {1 => 2}
-			expect($worker).to receive(:find_package_file).with($dummy_paths, $dummy_package_file).and_return('a')
-			expect($worker).to receive(:load_package_file).with('a').and_return($dummy_packages)
+			expect($worker).to receive(:find_and_load_packages_from_package_file).and_return(['a', $dummy_packages])
 			expect($worker).to receive(:get_list_of_packages_configured_for_bleeding_edge_versions).with($dummy_packages).and_return({2 => 3})
 			expect($worker).to receive(:get_list_of_deployed_packages).with({2 => 3}).and_return({3 => 4})
 			expect($worker).to receive(:update_package_file).with('a', {3 => 4})
@@ -611,17 +596,73 @@ describe PackageWorker do
 		expect($worker).to receive(:parse_package_from_string).with("two\t").and_return({:two => {}})
 		expect($worker).to receive(:parse_package_from_string).with("three").and_return({:three => {}})
 		$dummy_packages = { :one => { :read_version => 'v1' }, :two => { :read_version => 'v2' } }
+		expect($worker).to receive(:package_to_string).with( 'one', { :read_version => 'v1' } ).and_return('one')
+		expect($worker).to receive(:package_to_string).with( 'two', { :read_version => 'v2' } ).and_return('two')
 		$dummy_file = {}
 		expect($dummy_file).to receive(:write).with("a\n")
 		expect($dummy_file).to receive(:write).with("b\n")
 		expect($dummy_file).to receive(:write).with("c\n")
-		expect($dummy_file).to receive(:write).with("one some other text --r = v1\n")
+		expect($dummy_file).to receive(:write).with("one\n")
 		expect($dummy_file).to receive(:write).with("and\n")
-		expect($dummy_file).to receive(:write).with("two\t --r = v2\n")
+		expect($dummy_file).to receive(:write).with("two\n")
 		expect($dummy_file).to receive(:write).with("three\n")
 		expect($dummy_file).to receive(:close)
 		expect(File).to receive(:new).with("file", "w").and_return($dummy_file)
 
 		$worker.update_package_file "file", $dummy_packages
 	end
+
+	describe "when converting a package definition to string" do
+		before(:each) do
+			$worker = PackageWorker.new
+		end
+		it "converts correctly for packages configured for bleeding edge" do
+			converted_string = $worker.package_to_string( 'pkg', {} )
+			converted_string.should be == "pkg"
+		end
+		describe "converts correctly for packages locked at specific revision using" do
+			it ":read_version setting" do
+				converted_string = $worker.package_to_string( 'pkg', { :read_version => 'blah' } )
+				converted_string.should be == "pkg --r = blah"
+			end
+			it ":r setting" do
+				converted_string = $worker.package_to_string( 'pkg', { :r => 'blah' } )
+				converted_string.should be == "pkg --r = blah"
+			end
+			it ":v setting" do
+				converted_string = $worker.package_to_string( 'pkg', { :v => 'blah' } )
+				converted_string.should be == "pkg --v = blah"
+			end
+		end
+	end
+
+
+
+
+	################
+	describe "when unlocking packages" do
+		before(:each) do
+			$worker = PackageWorker.new
+		end
+		describe "raises error when" do
+		end
+		describe "raises message when" do
+			it "there are no packages to unlock" do
+				expect($worker).to receive(:find_and_load_packages_from_package_file).and_return([1, [2]])
+				expect($worker).to receive(:get_list_of_locked_packages).with([2]).and_return([4])
+				expect {
+					$worker.unlock_packages ['a', 'b', 'c']
+				}.to raise_error(ToolMessage, "no packages to unlock.")
+			end
+		end
+		it "unlocks packages" do
+			expect($worker).to receive(:find_and_load_packages_from_package_file).and_return([1, [2, 3]])
+			expect($worker).to receive(:get_list_of_locked_packages).with([2, 3]).and_return([4])
+			expect($worker).to receive(:unlock_locked_packages).with([4], ['a','b','c']).and_return('pkgs')
+			expect($worker).to receive(:write_packages_to_file).with(1, 'pkgs')
+			
+			$worker.unlock_packages ['a', 'b', 'c']
+		end
+	end
+
 end
