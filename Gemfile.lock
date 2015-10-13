@@ -14,9 +14,14 @@ GEM
     rspec-mocks (3.0.4)
       rspec-support (~> 3.0.0)
     rspec-support (3.0.4)
+    rubyzip (1.1.7)
 
 PLATFORMS
   x86-mingw32
 
 DEPENDENCIES
   rspec
+  rubyzip
+
+BUNDLED WITH
+   1.10.6
