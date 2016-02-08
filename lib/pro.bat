@@ -31,6 +31,8 @@ if not exist %project_path% (
 
 d:
 cd %project_path%
+set var=
+set platform=
 if exist environment.bat (
 	call environment.bat
 ) else (
