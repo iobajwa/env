@@ -94,7 +94,10 @@ class PackageWorker
 	def load_package_file(file)
 		packages = {}
 		lines = File.readlines file
-		lines.each {  |line| packages.merge! parse_package_from_string line }
+		lines.each {  |line|
+			next if line.strip == ""
+			packages.merge! parse_package_from_string line 
+		}
 
 		return packages
 	end

@@ -84,7 +84,7 @@ describe PackageWorker do
 		end
 
 		it "merges packages read from parse_package_from_string and returns the collection" do
-			expect(File).to receive(:readlines).and_return( ['one', 'two'] )
+			expect(File).to receive(:readlines).and_return( ['one', '', 'two'] )
 			expect($worker).to receive(:parse_package_from_string).with('one').and_return( {1 => 0} )
 			expect($worker).to receive(:parse_package_from_string).with('two').and_return( {2 => 0} )
 
