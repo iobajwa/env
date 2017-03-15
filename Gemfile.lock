@@ -1,27 +1,34 @@
 GEM
   remote: https://rubygems.org/
   specs:
+    RubyInline (3.12.4)
+      ZenTest (~> 4.3)
+    ZenTest (4.11.1)
     diff-lcs (1.2.5)
-    rspec (3.0.0)
-      rspec-core (~> 3.0.0)
-      rspec-expectations (~> 3.0.0)
-      rspec-mocks (~> 3.0.0)
-    rspec-core (3.0.3)
-      rspec-support (~> 3.0.0)
-    rspec-expectations (3.0.4)
+    fuzzy-string-match (0.9.7)
+      RubyInline (>= 3.8.6)
+    rspec (3.5.0)
+      rspec-core (~> 3.5.0)
+      rspec-expectations (~> 3.5.0)
+      rspec-mocks (~> 3.5.0)
+    rspec-core (3.5.4)
+      rspec-support (~> 3.5.0)
+    rspec-expectations (3.5.0)
       diff-lcs (>= 1.2.0, < 2.0)
-      rspec-support (~> 3.0.0)
-    rspec-mocks (3.0.4)
-      rspec-support (~> 3.0.0)
-    rspec-support (3.0.4)
-    rubyzip (1.1.7)
+      rspec-support (~> 3.5.0)
+    rspec-mocks (3.5.0)
+      diff-lcs (>= 1.2.0, < 2.0)
+      rspec-support (~> 3.5.0)
+    rspec-support (3.5.0)
+    rubyzip (1.2.0)
 
 PLATFORMS
   x86-mingw32
 
 DEPENDENCIES
+  fuzzy-string-match
   rspec
   rubyzip
 
 BUNDLED WITH
-   1.10.6
+   1.13.2
