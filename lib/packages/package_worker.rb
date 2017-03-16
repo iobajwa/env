@@ -51,7 +51,7 @@ class PackageWorker
 		file, packages = find_and_load_packages_from_package_file
 
 		bleeding_packages = get_list_of_packages_configured_for_bleeding_edge_versions packages
-		raise ToolMessage.new "no packages to lock." if bleeding_packages.length == 0
+		raise ToolMessage.new "already locked." if bleeding_packages.length == 0
 
 		deployed_packages = get_list_of_deployed_packages bleeding_packages
 		raise ToolException.new "Packages must first be deployed atleast once before using the lock command.\nThere are #{bleeding_packages.length} packages configured for bleeding edge out of which #{deployed_packages.length} are deployed." if bleeding_packages.length != deployed_packages.length

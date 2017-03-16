@@ -9,7 +9,7 @@ class Packages
         defaults_file = File.dirname(__FILE__) + "/packages/defaults.yaml"
         worker = PackageWorker.new defaults_file 
 
-        if command == "deploy"
+        if command == "install"
             worker.deploy_packages
         elsif command == "lock"
             worker.lock_packages
@@ -27,14 +27,14 @@ class Packages
   # Command Line Support ###############################
 	
   if ($0 == __FILE__)
-      valid_commands = ["new", "deploy", "lock", "clean"]
+      valid_commands = ["new", "install", "lock", "clean"]
       ENV['CD']      = Dir.pwd
 
       if ARGV.length == 0 || ARGV.length > 1 || !valid_commands.include?(ARGV[0])
           puts "Invalid argument" + (ARGV.length > 1 ? "s." : ".") unless ARGV.length == 0
           puts "Usage:\n" + 
                # "new     : setups the project to use default packages\n" +
-               "deploy  : pulls in the specified packages from their repos\n" +
+               "install : pulls in the specified packages from their repos\n" +
                "clean   : deletes all deployed packages\n" +
                "lock    : locks packages configured for bleeding edge versions to the deployed\n" +
                "          revisions\n"

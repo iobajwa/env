@@ -44,7 +44,7 @@ if ($0 == __FILE__)
 		bootstraper_file.write "cd #{project_root}\n"
 		bootstraper_file.write "title #{project_name}\n"
 		bootstraper_file.write "cls\n"
-		bootstraper_file.write "echo No packages available in #{packages_folder}. Probably a 'pkgs deploy' is required."  if packages == {}
+		# bootstraper_file.write "echo No packages available in #{packages_folder}. Probably a 'pkgs deploy' is required."  if packages == {}
 		bootstraper_file.write "environment.bat\n"
 		bootstraper_file.close
 		
