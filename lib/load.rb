@@ -11,6 +11,7 @@ def create_project_path base_path, project_name
 end
 
 def create_list_of_packages root
+	return {} unless Dir.exist? root
 	available_packages = Dir.entries("#{root}").select {  |entry| File.directory? File.join("#{root}",entry) and !(entry =='.' || entry == '..') }
 	packages = {}
 	available_packages.each {  |p|
@@ -43,7 +44,7 @@ if ($0 == __FILE__)
 		bootstraper_file.write "cd #{project_root}\n"
 		bootstraper_file.write "title #{project_name}\n"
 		bootstraper_file.write "cls\n"
-		bootstraper_file.write "echo No packages available in #{packages_folder}. Probably a 'packages deploy' is required."  if packages == {}
+		bootstraper_file.write "echo No packages available in #{packages_folder}. Probably a 'pkgs deploy' is required."  if packages == {}
 		bootstraper_file.write "environment.bat\n"
 		bootstraper_file.close
 		
