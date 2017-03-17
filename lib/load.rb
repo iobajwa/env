@@ -57,7 +57,9 @@ if ($0 == __FILE__)
 			File.readlines("#{prop[:path_file]}").each {  |l| scripts_path += "#{l.strip};" } if prop[:path_file]         # presently we only support absolute paths
 		}
 
-		paths = ENV['PATH'] + ";#{project_root}" + ";#{scripts_path}"
+		paths = "#{project_root};"
+		paths += "#{scripts_path}" unless scripts_path == ""
+		paths += ENV['PATH']
 		exec({"PATH" => paths, "CD" => project_root }, cmd_line)
 		exit
 	rescue ToolException => ex
