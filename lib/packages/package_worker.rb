@@ -25,12 +25,32 @@ class PackageWorker
 	end
 
 
+	def update_packages
+		file, packages = find_and_load_packages_from_package_file
+
+		outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true
+		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
+
+		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
+		download_packages outdated_packages, @defaults[:version_file_name]
+		install_packages outdated_packages
+
+		all_packages = remaining_packages.merge outdated_packages
+		update_package_file file, all_packages
+
+		length = outdated_packages.length
+		status = "updated #{outdated_packages.length} package"
+		status += length > 1 ? "s." : "."
+		puts status
+	end
+
+
 	# deploys packages to the project folder
 	def deploy_packages
 		
 		file, packages = find_and_load_packages_from_package_file
 
-		outdated_packages = get_list_of_outdated_packages packages
+		outdated_packages, remaining_packages = get_list_of_outdated_packages packages
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
 		
 		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
@@ -54,7 +74,7 @@ class PackageWorker
 		raise ToolMessage.new "already locked." if bleeding_packages.length == 0
 
 		deployed_packages = get_list_of_deployed_packages bleeding_packages
-		raise ToolException.new "Packages must first be deployed atleast once before using the lock command.\nThere are #{bleeding_packages.length} packages configured for bleeding edge out of which #{deployed_packages.length} are deployed." if bleeding_packages.length != deployed_packages.length
+		raise ToolException.new "All packages must first be installed before using the lock command.\n#{bleeding_packages.length} package(s) await installation." if bleeding_packages.length != deployed_packages.length
 
 		update_package_file file, deployed_packages
 	end
@@ -112,20 +132,24 @@ class PackageWorker
 		return file, packages
 	end
 
-	def get_list_of_outdated_packages(packages)
+	def get_list_of_outdated_packages packages, ignore_versions=false
 		outdated_packages = {}
+		remaining_packages = {}
 		packages.each_pair {  |name, properties|
 			version_deployed = get_version_of_deployed_package name, properties[:dump_at], @defaults[:version_file_name]
-			version_in_repo  = get_version_of_package_in_repo name, properties
-			next if version_deployed == version_in_repo
-			properties[:r] = version_in_repo if pkg_configured_for_bleeding_edge_updates( properties )
-			outdated_packages[name] = properties
+			version_in_repo  = get_version_of_package_in_repo name, properties, ignore_versions
+			if version_deployed == version_in_repo
+				remaining_packages[name] = properties
+			else
+				properties[:r] = version_in_repo if ignore_versions || pkg_configured_for_bleeding_edge_updates( properties )
+				outdated_packages[name] = properties
+			end
 		}
 
-		return outdated_packages
+		return outdated_packages, remaining_packages
 	end
 
-	def download_packages(packages, version_file)
+	def download_packages packages, version_file
 		Dir.mkdir @defaults[:package_dump] unless Dir.exist? @defaults[:package_dump]
 		packages.each_pair {  |name, properties|
 			write_status_message "downloading package", name, properties
@@ -269,9 +293,11 @@ class PackageWorker
 	# 	the trunk is polled for the latest version and returned.
 	# if the package is configured for specific revision (of trunk, or tag), 
 	#	the revision number is returned as-is.
-	def get_version_of_package_in_repo(name, properties)
-		return properties[:v] if properties.include?(:v)
-		return properties[:r] if properties.include?(:r)
+	def get_version_of_package_in_repo(name, properties, ignore_versions=false)
+		unless ignore_versions
+			return properties[:v] if properties.include?(:v)
+			return properties[:r] if properties.include?(:r)
+		end
 
 		puts "polling for latest version of '#{name}'.."
 		repo_type = properties[:repo_type]
