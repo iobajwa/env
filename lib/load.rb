@@ -51,16 +51,15 @@ if ($0 == __FILE__)
 		# build the command line
 		cmd_line = "cmd.exe /k #{bootstraper_file.path}"
 
-		# add the available paths exported by packages
-		scripts_path = ""
+		# paths discovered from each package
+		project_paths = "#{project_root};"
 		packages.each {  |name, prop|
-			File.readlines("#{prop[:path_file]}").each {  |l| scripts_path += "#{l.strip};" } if prop[:path_file]         # presently we only support absolute paths
+			File.readlines("#{prop[:path_file]}").each {  |l| project_paths += "#{l.strip};" } if prop[:path_file]         # presently we only support absolute paths
 		}
 
-		paths = "#{project_root};"
-		paths += "#{scripts_path}" unless scripts_path == ""
+		paths = "#{project_paths}"
 		paths += ENV['PATH']
-		exec({"PATH" => paths, "CD" => project_root }, cmd_line)
+		exec({"PATH" => paths, "CD" => project_root, "PROJECT_PATHS" => project_paths }, cmd_line)
 		exit
 	rescue ToolException => ex
 		puts ex
