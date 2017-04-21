@@ -10,15 +10,22 @@ def create_project_path base_path, project_name
 	return "#{base_path}/#{project_name}"
 end
 
+def find_env_file path
+	["paths.txt", "env.txt"].each {  |f|
+		env_file = File.join path, f
+		return env_file if File.exist? env_file
+	}
+	return nil
+end
+
 def create_list_of_packages root
 	return {} unless Dir.exist? root
 	available_packages = Dir.entries("#{root}").select {  |entry| File.directory? File.join("#{root}",entry) and !(entry =='.' || entry == '..') }
 	packages = {}
 	available_packages.each {  |p|
-		path = File.join root, p
-		path_file = File.join path, "paths.txt"
-		path_file = nil unless File.exist? path_file
-		packages[p] = { :path => path, :path_file => path_file }
+		path     = File.join root, p
+		env_file = find_env_file path
+		packages[p] = { :path => path, :env_file => env_file }
 	}
 
 	return packages
@@ -54,7 +61,7 @@ if ($0 == __FILE__)
 		# paths discovered from each package
 		project_paths = "#{project_root};"
 		packages.each {  |name, prop|
-			File.readlines("#{prop[:path_file]}").each {  |l| project_paths += "#{l.strip};" } if prop[:path_file]         # presently we only support absolute paths
+			File.readlines("#{prop[:env_file]}").each {  |l| project_paths += "#{l.strip};" } if prop[:env_file]         # presently we only support absolute paths
 		}
 
 		paths = "#{project_paths}"

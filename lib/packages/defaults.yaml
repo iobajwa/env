@@ -22,6 +22,12 @@
     :minlab:
         :repo: <%= ENV['GIT_SERVER'] %>/minlab/
         :located_at: lib/
+        # :repo_type: :git
+        :installer: unpack.bat
+    :tinker:
+        :repo: <%= ENV['GIT_SERVER'] %>/tinker/
+        # :located_at: package/
+        # :repo_type: :git
         :installer: unpack.bat
 
 
