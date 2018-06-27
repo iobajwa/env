@@ -6,8 +6,7 @@
 class Packages
 
     def initialize(command)
-        defaults_file = File.dirname(__FILE__) + "/packages/defaults.yaml"
-        worker = PackageWorker.new defaults_file 
+        worker = PackageWorker.new
 
         if command == "install"
             worker.deploy_packages

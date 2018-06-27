@@ -2,20 +2,39 @@
 [
 	"exceptions",
 ].each {|req| require "#{File.expand_path(File.dirname(__FILE__))}/#{req}"}
-require "yaml"
-require "erb"
 require "fileutils"
+require "zip"
 
 class PackageWorker
 
 	attr_accessor :defaults
 
-	def initialize(settings_file=nil)
-		@defaults = {}
+	@@defaults = {
+		:possible_package_installers => [ "unpack.bat", "unpack.rb", "unpack.py", "install.bat", "install.rb", "install.py" ],
+		:possible_package_locations => [ "package/", "content/" ],
+		:possible_packages_files => [ "pkgs.lock", "project.packages.lock", "project.pkgs.lock", "project.packages", "project.pkgs", ".packages", ".pkgs", ".pkgs.lock" ],
+		:default_pkgs_lock_look_up_paths => [ ENV["ProjectRoot"], ENV["CD"] ],
+		:version_file_name => "version.lock",
+		:default_repo_type => :git,
+		:known_packages => [],
+		:package_dump => nil,
+		:git_server_address => ENV["GIT_SERVER"],
+		:svn_server_address => ENV["SVN_SERVER"],
+	}
 
-		if settings_file
-			@defaults = YAML.load (ERB.new File.read(settings_file)).result
+	def initialize
+
+		@defaults = @@defaults
+
+		@defaults[:package_dump] =
+		if ENV["PackagesRoot"]
+			ENV["PackagesRoot"]
+		elsif ENV["ArtifactsRoot"]
+			ENV["ArtifactsRoot"]
+		else
+			raise ToolException.new "Fatal Error: no place to call home.. err.."
 		end
+
 	end
 
 	# removes the 'packages' folder altogether
@@ -81,7 +100,7 @@ class PackageWorker
 
 
 	# unlocks the passed packages locked earlier
-	def unlock_packages(pkgs_to_unlock)
+	def unlock_packages pkgs_to_unlock
 
 		file, packages = find_and_load_packages_from_package_file
 		locked_packages = get_list_of_locked_packages packages
@@ -98,14 +117,16 @@ class PackageWorker
 
 
 	####################################################################
-	def find_package_file(paths, packages_file)
+	def find_package_file paths, possible_packages_files
 		file = nil
 		
 		paths.each {  |p|
 			next unless p
-			file = p + packages_file
-			break if File.exist? file
-			file = nil
+			possible_packages_files.each {  |pkgs_file|
+				file = p + pkgs_file
+				break if File.exist? file
+				file = nil
+			} if possible_packages_files
 		} if paths
 
 		return file
@@ -123,8 +144,8 @@ class PackageWorker
 	end
 
 	def find_and_load_packages_from_package_file
-		file = find_package_file @defaults[:default_look_up_paths], @defaults[:project_package_file]
-		raise ToolException.new "Could not locate the project.packages file." unless file
+		file = find_package_file @defaults[:default_pkgs_lock_look_up_paths], @defaults[:possible_packages_files]
+		raise ToolException.new "Could not locate the pkgs lock file." unless file
 
 		packages = load_package_file file
 		raise ToolMessage.new "There are no package dependencies!" if packages.length == 0
@@ -184,7 +205,8 @@ class PackageWorker
 			raise ToolException.new "package download failed. #{repo_type.to_s.upcase} output: #{output}" if exit_code != 0
 
 			if repo_type == :git
-				unzip_package zip_file, properties[:located_at], properties[:dump_at]
+				folder_to_extract = properties[:located_at]
+				unzip_package zip_file, folder_to_extract, properties[:dump_at]
 				File.delete zip_file
 			end
 
@@ -197,41 +219,60 @@ class PackageWorker
 		}
 	end
 
-	def unzip_package(zip_file, relative_path, destination_path)
-		require "zip"
+	def unzip_package(zip_file, relative_paths, destination_path)
 
 		Zip::File.open(zip_file) {  |zip_file|
+
+			# determine if it contains the 'relative package dir' and if yes then which one
+			relative_path = find_location zip_file, relative_paths
+
 			zip_file.each {  |f|
-				next unless f.name.start_with? relative_path
-				name = f.name[relative_path.length..f.name.length]
-				next if name == "" || name == "/" || name == "\\"
+				if relative_path
+					next unless f != '' and f.name.start_with? relative_path
+					name = f.name[relative_path.length..f.name.length]
+					next if name == "" || name == "/" || name == "\\"
+				else
+					name = f.name
+				end
 				f_path = File.join(destination_path, name)
 				FileUtils.mkdir_p(File.dirname(f_path))
-				zip_file.extract(f, f_path) unless File.exist?(f_path)
-		   }
+				zip_file.extract(f, f_path) unless File.exist? f_path
+			}
 		}
+
 	end
 
 	def install_packages(packages)
+
 		packages.each_pair{  |name, properties|
-			installer = properties[:installer]
-			next unless installer
+			possible_installers = properties[:installer]
+			next unless possible_installers
 			artifacts_root = properties[:dump_at]
-			installer = File.join properties[:dump_at], properties[:installer]
-			next unless File.exist? installer
 
-			write_status_message "installing package", name, properties
-			require 'open3'
+			installer_exists = false
+			possible_installers.each {  |installer|
+				installer = File.join properties[:dump_at], installer
+				installer_exists = File.exist? installer
 
-			log = File.new("#{artifacts_root}/installation.log", "w+")
-			command = "#{installer} \"#{artifacts_root}\""
+				if installer_exists
+					write_status_message "installing package", name, properties
+					require 'open3'
 
-			Open3.popen3(command) do |stdin, stdout, stderr|
-			     log.puts "[OUTPUT]:\n#{stdout.read}\n"
-			     unless (err = stderr.read).empty? then 
-			         log.puts "[ERROR]:\n#{err}\n"
-			     end
-			end
+					log = File.new("#{artifacts_root}/installation.log", "w+")
+					command = "#{installer} \"#{artifacts_root}\""
+
+					Open3.popen3(command) do |stdin, stdout, stderr|
+						log.puts "[OUTPUT]:\n#{stdout.read}\n"
+						unless (err = stderr.read).empty?
+							write_status_message "error installing package", name, properties
+							log.puts "[ERROR]:\n#{err}\n"
+						end
+					end
+					break
+				end
+			}
+
+			write_status_message "no installer found for", name, properties unless installer_exists
 			# output = output.split("\n")
 			# output = [output] unless output.class == Array
 			# exit_code = $?.exitstatus
@@ -243,7 +284,15 @@ class PackageWorker
 
 
 	# helpers
-	def parse_package_from_string(raw)
+	def find_location zip, relative_paths
+		path = nil
+		zip.each { |f|
+			relative_paths.each { |p| return p if f.name.start_with? p }
+		}
+		return path
+	end
+
+	def parse_package_from_string raw
 		elements = raw.split("--").map(&:strip)
 		pkg_name = elements.shift
 		pkg_name.strip! unless pkg_name
@@ -255,8 +304,8 @@ class PackageWorker
 		repo_type = known_package_properties[:repo_type]
 		repo_type = @defaults[:default_repo_type] if repo_type == nil
 
-		default_installer = known_package_properties.include?(:installer) ? known_package_properties[:installer] : @defaults[:default_package_installer]
-		default_location  = known_package_properties.include?(:located_at) ? known_package_properties[:located_at] : @defaults[:default_package_location]
+		default_installer = known_package_properties.include?(:installer) ? known_package_properties[:installer] : @defaults[:possible_package_installers]
+		default_location  = known_package_properties.include?(:located_at) ? known_package_properties[:located_at] : @defaults[:possible_package_locations]
 		default_dump_at   = @defaults[:package_dump]
 		default_dump_at   = File.join(default_dump_at, pkg_name.to_s)
 		package_repo      = known_package_properties.include?(:repo) ? known_package_properties[:repo] : package_properties[:repo]
@@ -267,7 +316,7 @@ class PackageWorker
 			deep_path = package_properties.include?(:v) ? "tags/#{package_properties[:v]}" : "trunk"
 			package_repo = File.join(package_repo, deep_path)
 		elsif repo_type == :git
-			default_server    = @defaults[:git_server_address]
+			default_server = @defaults[:git_server_address]
 		else
 			raise ToolException.new "'#{repo_type}' repos are not supported (package: '#{pkg_name}')."
 		end
@@ -290,7 +339,7 @@ class PackageWorker
 	end
 
 	# if the package is configured for bleeding edge versions, 
-	# 	the trunk is polled for the latest version and returned.
+	# 	the trunk/master is polled for the latest version and returned.
 	# if the package is configured for specific revision (of trunk, or tag), 
 	#	the revision number is returned as-is.
 	def get_version_of_package_in_repo(name, properties, ignore_versions=false)
