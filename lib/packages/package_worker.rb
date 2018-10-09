@@ -22,29 +22,16 @@ class PackageWorker
 		:svn_server_address => ENV["SVN_SERVER"],
 	}
 
-	def initialize
-
-		@defaults = @@defaults
-
-		@defaults[:package_dump] =
-		if ENV["PackagesRoot"]
-			ENV["PackagesRoot"]
-		elsif ENV["ArtifactsRoot"]
-			ENV["ArtifactsRoot"]
-		else
-			raise ToolException.new "Fatal Error: no place to call home.. err.."
-		end
-
-	end
-
 	# removes the 'packages' folder altogether
 	def clean
+		load_defaults
 		packages_folder = @defaults[:package_dump]
 		FileUtils.rm_r packages_folder if Dir.exist? packages_folder
 	end
 
 
 	def update_packages
+		load_defaults
 		file, packages = find_and_load_packages_from_package_file
 
 		outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true
@@ -66,7 +53,7 @@ class PackageWorker
 
 	# deploys packages to the project folder
 	def deploy_packages
-		
+		load_defaults
 		file, packages = find_and_load_packages_from_package_file
 
 		outdated_packages, remaining_packages = get_list_of_outdated_packages packages
@@ -87,6 +74,7 @@ class PackageWorker
 	# to the specific revision number of the deployed package (provided it has been
 	# deployed)
 	def lock_packages
+		load_defaults
 		file, packages = find_and_load_packages_from_package_file
 
 		bleeding_packages = get_list_of_packages_configured_for_bleeding_edge_versions packages
@@ -101,7 +89,7 @@ class PackageWorker
 
 	# unlocks the passed packages locked earlier
 	def unlock_packages pkgs_to_unlock
-
+		load_defaults
 		file, packages = find_and_load_packages_from_package_file
 		locked_packages = get_list_of_locked_packages packages
 		pkgs_to_unlock = locked_packages if pkgs_to_unlock == nil || pkgs_to_unlock == []
@@ -113,10 +101,46 @@ class PackageWorker
 	end
 
 
+	# generates a .batch file which can be invoked to update all remote git repositories
+	def gen_remote_update_scripts
+		repo_root = @@defaults[:git_server_address]
+		raise ToolException.new "repo-root does not exists ('#{repo_root}')" unless Dir.exist? repo_root
+
+		# create a list of all git-repos
+		dirs = Dir.entries("#{repo_root}").select { |e| File.directory? File.join(repo_root, e) and !(e =='.' || e == '..') }
+		found_repos = []
+		dirs.each { |d| 
+			path = File.join repo_root, d
+			next unless Dir.exist? "#{path}/.git" or File.exist? "#{path}/config"
+			found_repos.push path.gsub('\\', '/')
+		}
+
+		return unless found_repos.length > 0
+		code = []
+		found_repos.each { |r| code.push "cd #{r}", "git fetch origin master:master" }
+		f = File.new "remote-update.bat", "w"
+		f.puts code
+		f.close
+	end
+
+
 
 
 
 	####################################################################
+
+	def load_defaults
+		@defaults = @@defaults
+		@defaults[:package_dump] =
+		if ENV["PackagesRoot"]
+			ENV["PackagesRoot"]
+		elsif ENV["ArtifactsRoot"]
+			ENV["ArtifactsRoot"]
+		else
+			raise ToolException.new "Fatal Error: no place to call home.. err.."
+		end
+	end
+
 	def find_package_file paths, possible_packages_files
 		file = nil
 		

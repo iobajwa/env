@@ -16,8 +16,8 @@ class Packages
             worker.clean
         elsif command == "update"
             worker.update_packages
-        else
-            worker.new_package_list
+        elsif command == "remote-update"
+            worker.gen_remote_update_scripts
         end
 
         puts "Done."
@@ -28,7 +28,7 @@ class Packages
   # Command Line Support ###############################
 	
   if ($0 == __FILE__)
-      valid_commands = ["install", "lock", "clean", "update"]
+      valid_commands = ["install", "lock", "clean", "update", "remote-update"]
       ENV['CD']      = Dir.pwd
 
       if ARGV.length == 0 || ARGV.length > 1 || !valid_commands.include?(ARGV[0])
@@ -42,7 +42,8 @@ class Packages
                "lock    : locks packages configured for bleeding edge versions to the deployed\n" +
                "          revisions\n" + 
                "update  : updates all packages to their latest versions and locks the\n" +
-               "          non-bleeding versions"
+               "          non-bleeding versions\n" +
+               "remote-update : generates a batch-file to update all repo snapshots"
                # "check_updates : polls the package repos to see if their are any updates available"
           exit 1
       end
