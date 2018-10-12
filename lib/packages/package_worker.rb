@@ -31,10 +31,17 @@ class PackageWorker
 
 
 	def update_packages
-		load_defaults
-		file, packages = find_and_load_packages_from_package_file
+		begin
+			load_defaults
+			file, packages = find_and_load_packages_from_package_file
 
-		outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true
+			outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true
+		rescue Errno::ENOENT => e
+			raise ToolException.new "Cannot access GIT_SERVER ('#{@defaults[:git_server_address]}')"
+		rescue Exception => e
+			raise ToolException.new "Fatal Error: #{e}"
+		end
+
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
 
 		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
