@@ -45,8 +45,8 @@ class PackageWorker
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
 
 		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
-		download_packages outdated_packages, @defaults[:version_file_name]
-		install_packages outdated_packages
+		download_packages outdated_packages
+		install_packages outdated_packages, @defaults[:version_file_name]
 
 		all_packages = remaining_packages.merge outdated_packages
 		update_package_file file, all_packages
@@ -67,8 +67,8 @@ class PackageWorker
 		raise ToolMessage.new "all packages are up-to-date." if outdated_packages.length == 0
 		
 		outdated_packages.each_pair {  |name, properties| puts "package '#{name}' is outdated." }
-		download_packages outdated_packages, @defaults[:version_file_name]
-		install_packages outdated_packages
+		download_packages outdated_packages
+		install_packages outdated_packages, @defaults[:version_file_name]
 
 		length = outdated_packages.length
 		status = "deployed #{outdated_packages.length} package"
@@ -201,7 +201,7 @@ class PackageWorker
 		return outdated_packages, remaining_packages
 	end
 
-	def download_packages packages, version_file
+	def download_packages packages
 		Dir.mkdir @defaults[:package_dump] unless Dir.exist? @defaults[:package_dump]
 		packages.each_pair {  |name, properties|
 			write_status_message "downloading package", name, properties
@@ -221,13 +221,14 @@ class PackageWorker
 				old_wd = Dir.getwd
 				FileUtils.mkdir output_dir
 				begin
-					Dir.chdir(properties[:repo])
 					zip_file = File.join(output_dir, "package.zip")
-					branch = "master"
-					branch = properties[:v] if properties.include?(:v)
-					branch = properties[:r] if properties.include?(:r)
-					git_command = "git archive #{branch} --format zip --output \"#{zip_file}\" -0"
-					output, exit_code = execute_command git_command
+					Dir.chdir(properties[:repo]) do
+						branch = "master"
+						branch = properties[:v] if properties.include?(:v)
+						branch = properties[:r] if properties.include?(:r)
+						git_command = "git archive #{branch} --format zip --output \"#{zip_file}\" -0"
+						output, exit_code = execute_command git_command
+					end
 				rescue
 					Dir.chdir old_wd
 				end
@@ -240,13 +241,6 @@ class PackageWorker
 				unzip_package zip_file, folder_to_extract, properties[:dump_at]
 				File.delete zip_file
 			end
-
-			specific_version = properties[:r] if properties.include?(:r)
-			specific_version = properties[:v] if properties.include?(:v)
-			next unless specific_version
-
-			version_file_full_path = File.join properties[:dump_at], version_file
-			File.write version_file_full_path, "#{specific_version}"
 		}
 	end
 
@@ -273,7 +267,7 @@ class PackageWorker
 
 	end
 
-	def install_packages(packages)
+	def install_packages packages, version_file
 
 		packages.each_pair{  |name, properties|
 			possible_installers = properties[:installer]
@@ -289,7 +283,7 @@ class PackageWorker
 					write_status_message "installing package", name, properties
 					require 'open3'
 
-					log = File.new("#{artifacts_root}/installation.log", "w+")
+					log     = File.new("#{artifacts_root}/installation.log", "w+")
 					command = "#{installer} \"#{artifacts_root}\""
 
 					Open3.popen3(command) do |stdin, stdout, stderr|
@@ -299,11 +293,19 @@ class PackageWorker
 							log.puts "[ERROR]:\n#{err}\n"
 						end
 					end
+					log.close
 					break
 				end
 			}
 
 			write_status_message "no installer found for", name, properties unless installer_exists
+			specific_version = properties[:r] if properties.include?(:r)
+			specific_version = properties[:v] if properties.include?(:v)
+			next unless specific_version
+
+			version_file_full_path = File.join properties[:dump_at], version_file
+			File.write version_file_full_path, "#{specific_version}"
+			
 			# output = output.split("\n")
 			# output = [output] unless output.class == Array
 			# exit_code = $?.exitstatus
@@ -391,13 +393,12 @@ class PackageWorker
 			} if exit_code == 0
 			raise ToolException.new("failed to receive correct version. SVN output: #{output}") unless revision
 		else
-			old_wd = Dir.getwd
-			Dir.chdir properties[:repo]
-			begin				
-				output, exit_code = execute_command "git log -n 1 master --pretty=format:\"%H\""
-				revision = output[0] if exit_code == 0
-			rescue Exception => e
-				Dir.chdir old_wd
+			Dir.chdir(properties[:repo]) do
+				begin				
+					output, exit_code = execute_command "git log -n 1 master --pretty=format:\"%H\""
+					revision = output[0] if exit_code == 0
+				rescue Exception => e
+				end
 			end
 		end
 		return revision
