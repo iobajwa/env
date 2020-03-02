@@ -30,12 +30,12 @@ class PackageWorker
 	end
 
 
-	def update_packages
+	def update_packages package_names=[]
 		begin
 			load_defaults
 			file, packages = find_and_load_packages_from_package_file
 
-			outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true
+			outdated_packages, remaining_packages = get_list_of_outdated_packages packages, true, package_names
 		rescue Errno::ENOENT => e
 			raise ToolException.new "Cannot access GIT_SERVER ('#{@defaults[:git_server_address]}')"
 		rescue Exception => e
@@ -184,10 +184,17 @@ class PackageWorker
 		return file, packages
 	end
 
-	def get_list_of_outdated_packages packages, ignore_versions=false
+	def get_list_of_outdated_packages packages, ignore_versions=false, filter_packges=[]
 		outdated_packages = {}
 		remaining_packages = {}
+		
 		packages.each_pair {  |name, properties|
+			
+			if filter_packges.length != 0 && !filter_packges.include?(name.to_s)
+				remaining_packages[name] = properties
+				next
+			end
+
 			version_deployed = get_version_of_deployed_package name, properties[:dump_at], @defaults[:version_file_name]
 			version_in_repo  = get_version_of_package_in_repo name, properties, ignore_versions
 			if version_deployed == version_in_repo
@@ -401,7 +408,7 @@ class PackageWorker
 				end
 			end
 		end
-		return revision
+		return revision.strip
 	end
 
 	def execute_command(command)
@@ -449,13 +456,17 @@ class PackageWorker
 		lines = File.readlines file
 		updated_lines = []
 		lines.each {  |line|
-			pkg = parse_package_from_string line
-			pkg_name = pkg.keys[0]
+			pkg             = parse_package_from_string line
+			pkg_name        = pkg.keys[0]
+			stringified_pkg = ""
+
 		 	if packages_to_update.include? pkg_name
-		 		updated_lines.push package_to_string( pkg_name.to_s, packages_to_update[pkg_name] )
+		 		stringified_pkg = package_to_string( pkg_name.to_s, packages_to_update[pkg_name] )
 		 	else
-				updated_lines.push line
+				stringified_pkg = line
 		 	end
+		 	stringified_pkg.strip!
+		 	updated_lines.push stringified_pkg
 		}
 
 		f = File.new(file, "w")
